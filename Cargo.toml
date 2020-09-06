@@ -1,0 +1,13 @@
+[package]
+name = "dumplack"
+version = "0.1.0"
+authors = ["gtongy <32930281+gtongy@users.noreply.github.com>"]
+edition = "2018"
+
+[dependencies.async-std]
+version = "1"
+features = ["attributes"]
+
+[dependencies.sqlx]
+version = "0.4.0-beta.1"
+features = ["mysql"]
