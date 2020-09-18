@@ -5,7 +5,7 @@ use std::process::Command;
 
 #[derive(Deserialize, Debug)]
 struct Config {
-    user: String,
+    user_name: String,
     password: String,
     host: String,
     port: u16,
@@ -20,10 +20,17 @@ fn main() {
             process::exit(1);
         }
     };
-    println!("{:#?}", config);
-    Command::new("sh")
-        .arg("-c")
-        .arg("echo hello")
-        .spawn()
+    const PARALLEL_NUM: u16 = 3;
+    const FILENAME: &str = "demo.sql";
+    Command::new("mysqlpump")
+        .arg(format!("{}{}", "-u", config.user_name))
+        .arg(format!("{}{}", "-p", config.password))
+        .arg(format!("{}{}", "-h", config.host))
+        .arg(format!("{} {}", "-P", config.port))
+        .args(&["--single-transaction", "--skip-column-statistics"])
+        .arg(format!("{}={}", "--default-parallelism", PARALLEL_NUM))
+        .arg(format!("{}", config.schema))
+        .arg(format!("> {}", FILENAME))
+        .status()
         .expect("failed to execute process");
 }
