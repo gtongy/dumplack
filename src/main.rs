@@ -1,19 +1,29 @@
-use sqlx::mysql::MySqlPoolOptions;
+use envy;
+use serde_derive::Deserialize;
+use std::process;
+use std::process::Command;
 
-#[derive(sqlx::FromRow)]
-struct User {
-    id: u64,
+#[derive(Deserialize, Debug)]
+struct Config {
+    user: String,
+    password: String,
+    host: String,
+    port: u16,
+    schema: String,
 }
 
-#[async_std::main]
-async fn main() -> Result<(), sqlx::Error> {
-    let pool = MySqlPoolOptions::new()
-        .max_connections(5)
-        .connect("")
-        .await?;
-    let rows = sqlx::query_as::<_, User>("SELECT * FROM users")
-        .fetch_all(&pool)
-        .await?;
-    println!("{}", rows[0].id);
-    Ok(())
+fn main() {
+    let config = match envy::from_env::<Config>() {
+        Ok(val) => val,
+        Err(err) => {
+            println!("{}", err);
+            process::exit(1);
+        }
+    };
+    println!("{:#?}", config);
+    Command::new("sh")
+        .arg("-c")
+        .arg("echo hello")
+        .spawn()
+        .expect("failed to execute process");
 }
