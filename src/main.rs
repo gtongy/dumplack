@@ -1,4 +1,8 @@
+use bytes::Bytes;
 use envy;
+use futures::{FutureExt, TryStreamExt};
+use rusoto_core::Region;
+use rusoto_s3::*;
 use serde_derive::Deserialize;
 use std::fs::File;
 use std::io::Error;
@@ -12,9 +16,11 @@ struct Config {
     host: String,
     port: u16,
     schema: String,
+    bucket_name: String,
 }
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let config = match envy::from_env::<Config>() {
         Ok(val) => val,
         Err(err) => {
@@ -47,6 +53,22 @@ fn main() -> Result<(), Error> {
             .stderr(Stdio::from(errors))
             .spawn()?;
         sql_file_output.wait()?;
+        let meta = std::fs::metadata(OUTPUT_FILE_NAME).unwrap();
+        let read_stream = tokio::fs::read(OUTPUT_FILE_NAME.to_owned())
+            .into_stream()
+            .map_ok(Bytes::from);
+        let req = PutObjectRequest {
+            bucket: String::from(config.bucket_name),
+            key: String::from(OUTPUT_FILE_NAME),
+            content_length: Some(meta.len() as i64),
+            body: Some(StreamingBody::new(read_stream)),
+            ..Default::default()
+        };
+        let s3_client = S3Client::new(Region::ApNortheast1);
+        s3_client
+            .put_object(req)
+            .await
+            .expect("Couldn't PUT object");
     }
     Ok(())
 }
