@@ -22,20 +22,31 @@ fn main() -> Result<(), Error> {
             process::exit(1);
         }
     };
-    const PARALLEL_NUM: u16 = 3;
-    let outputs = File::create("output.sql")?;
-    let errors = outputs.try_clone()?;
-    Command::new("mysqlpump")
+    let mut sql_file_output = Command::new("mysqldump")
         .arg(format!("{}{}", "-u", config.user_name))
         .arg(format!("{}{}", "-p", config.password))
         .arg(format!("{}{}", "-h", config.host))
         .arg(format!("{} {}", "-P", config.port))
-        .args(&["--single-transaction", "--skip-column-statistics"])
-        .arg(format!("{}={}", "--default-parallelism", PARALLEL_NUM))
+        .args(&[
+            "--single-transaction",
+            "--skip-column-statistics",
+            "--complete-insert",
+        ])
         .arg(format!("{}", config.schema))
-        .stdout(Stdio::from(outputs))
-        .stderr(Stdio::from(errors))
-        .status()
+        .stdout(Stdio::piped())
+        .spawn()
         .expect("failed to execute process");
+    if let Some(_du_output) = sql_file_output.stdout.take() {
+        const OUTPUT_FILE_NAME: &str = "output.sql";
+        let outputs = File::create(OUTPUT_FILE_NAME)?;
+        let errors = outputs.try_clone()?;
+        Command::new("masking")
+            .stdin(_du_output)
+            .stdout(Stdio::piped())
+            .stdout(Stdio::from(outputs))
+            .stderr(Stdio::from(errors))
+            .spawn()?;
+        sql_file_output.wait()?;
+    }
     Ok(())
 }
