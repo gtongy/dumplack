@@ -21,6 +21,7 @@ struct Config {
     bucket_name: String,
     slack_hook: String,
     slack_channel_name: String,
+    aws_region: String,
 }
 
 #[tokio::main]
@@ -68,15 +69,15 @@ async fn main() -> Result<(), Error> {
             body: Some(StreamingBody::new(read_stream)),
             ..Default::default()
         };
-        let s3_client = S3Client::new(Region::ApNortheast1);
+        let s3_client = S3Client::new(Region::default());
         s3_client
             .put_object(req)
             .await
             .expect("Couldn't PUT object");
         let slack = Slack::new(config.slack_hook.as_ref()).unwrap();
         let url = format!(
-            "https://{}.s3-ap-northeast-1.amazonaws.com/{}",
-            &config.bucket_name, OUTPUT_FILE_NAME
+            "https://{}.s3-{}.amazonaws.com/{}",
+            &config.bucket_name, &config.aws_region, OUTPUT_FILE_NAME
         );
         let p = PayloadBuilder::new()
             .text(vec![Text("file download link get!\n".into()), Text(url.into())].as_slice())
