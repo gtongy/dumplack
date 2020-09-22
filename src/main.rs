@@ -22,7 +22,7 @@ async fn main() -> Result<(), Error> {
         }
     };
     let slack = slack::SlackClient::new(config.slack_hook, config.slack_channel_name);
-    let mut sql_file_output = Command::new("mysqldump")
+    let sql_file_spawn = Command::new("mysqldump")
         .arg(format!("{}{}", "-u", config.user_name))
         .arg(format!("{}{}", "-p", config.password))
         .arg(format!("{}{}", "-h", config.host))
@@ -35,42 +35,47 @@ async fn main() -> Result<(), Error> {
         .arg(format!("{}", config.schema))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
-        .expect("failed to execute process");
+        .spawn();
 
-    // TODO: stderrのエラーハンドリング
+    if let Ok(mut child) = sql_file_spawn {
+        let exit_status = child.wait().unwrap();
+        if !exit_status.success() {
+            println!("mysql dump is invalid");
+            process::exit(1);
+        }
+        if let Some(_du_output) = child.stdout.take() {
+            let now = Utc::now().format("%Y%m%d%H%M%S").to_string();
+            let output_file_name = format!("{}.sql", now);
+            let outputs = File::create(output_file_name.clone())?;
+            Command::new("masking")
+                .stdin(_du_output)
+                .stdout(Stdio::from(outputs))
+                .spawn()?;
 
-    if let Some(_du_output) = sql_file_output.stdout.take() {
-        let now = Utc::now().format("%Y%m%d%H%M%S").to_string();
-        let output_file_name = format!("{}.sql", now);
-        let outputs = File::create(output_file_name.clone())?;
-        Command::new("masking")
-            .stdin(_du_output)
-            .stdout(Stdio::from(outputs))
-            .spawn()?;
-
-        let meta = std::fs::metadata(output_file_name.clone()).unwrap();
-        let read_stream = tokio::fs::read(output_file_name.clone().to_owned())
-            .into_stream()
-            .map_ok(Bytes::from);
-        let req = PutObjectRequest {
-            bucket: config.bucket_name.clone(),
-            key: String::from(output_file_name.clone()),
-            content_length: Some(meta.len() as i64),
-            body: Some(StreamingBody::new(read_stream)),
-            ..Default::default()
-        };
-        let s3_client = S3Client::new(Region::default());
-        s3_client.put_object(req).await.expect("");
-        let url = format!(
-            "https://{}.s3-{}.amazonaws.com/{}",
-            &config.bucket_name,
-            &config.aws_region,
-            output_file_name.clone()
-        );
-        slack
-            .notify_send_file_url(String::from("file download link get!\n"), url)
-            .await;
+            let meta = std::fs::metadata(output_file_name.clone()).unwrap();
+            let read_stream = tokio::fs::read(output_file_name.clone().to_owned())
+                .into_stream()
+                .map_ok(Bytes::from);
+            let req = PutObjectRequest {
+                bucket: config.bucket_name.clone(),
+                key: String::from(output_file_name.clone()),
+                content_length: Some(meta.len() as i64),
+                body: Some(StreamingBody::new(read_stream)),
+                ..Default::default()
+            };
+            let s3_client = S3Client::new(Region::default());
+            s3_client.put_object(req).await.expect("");
+            let url = format!(
+                "https://{}.s3-{}.amazonaws.com/{}",
+                &config.bucket_name,
+                &config.aws_region,
+                output_file_name.clone()
+            );
+            slack
+                .notify_send_file_url(String::from("file download link get!\n"), url)
+                .await;
+        }
     }
+
     Ok(())
 }
