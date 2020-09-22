@@ -361,8 +361,10 @@ name = "dumplack"
 version = "0.1.0"
 dependencies = [
  "bytes 0.5.6",
+ "chrono",
  "envy",
  "futures 0.3.5",
+ "log 0.4.11",
  "rusoto_core",
  "rusoto_s3",
  "serde",
