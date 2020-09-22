@@ -5,7 +5,6 @@ use futures::{FutureExt, TryStreamExt};
 use rusoto_core::Region;
 use rusoto_s3::*;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::Error;
 use std::process;
 use std::process::{Command, Stdio};
